@@ -1,0 +1,53 @@
+name: Build & Publish Cast Docker Image (GHCR)
+
+on:
+  push:
+    branches:
+      - cast-web-sender
+  workflow_dispatch:
+
+concurrency:
+  group: ghcr-cast-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker-ghcr:
+    name: Build & Push linux/amd64 to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Navidrome Cast image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: final
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}:latest
+            ghcr.io/${{ github.repository }}:0.64.2-cast
+            ghcr.io/${{ github.repository }}:cast-web-sender
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            GIT_TAG=v0.64.2-cast
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Navidrome v0.64.2 with native Google Cast Web Sender UI support
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
