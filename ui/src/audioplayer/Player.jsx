@@ -368,8 +368,12 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
       }
       setHeartbeatTrackId(null)
       setCurrentTrackId(null)
+      // navidrome-music-player passes its internal __PLAYER_KEY__ as nextPlayId; fall back to uuid
       const nextItem = Array.isArray(audioLists)
-        ? audioLists.find((item) => item.uuid === nextPlayId)
+        ? audioLists.find(
+            (item) =>
+              item.__PLAYER_KEY__ === nextPlayId || item.uuid === nextPlayId,
+          )
         : null
       if (nextItem) {
         syncTrackMetadata(nextItem)
