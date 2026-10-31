@@ -33,6 +33,7 @@ import subsonic from '../subsonic'
 import locale from './locale'
 import { keyMap } from '../hotkeys'
 import keyHandlers from './keyHandlers'
+import useMediaSession from './useMediaSession'
 import { calculateGain } from '../utils/calculateReplayGain'
 import { detectBrowserProfile, decisionService } from '../transcode'
 
@@ -50,6 +51,7 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
   const lastPositionMsRef = useRef(0)
   const currentTrackIdRef = useRef(null)
   const stoppedRef = useRef(false)
+  const { syncTrackMetadata } = useMediaSession(audioInstance, playerState)
   const isDesktop = useMediaQuery('(min-width:810px)')
   const isMobilePlayer =
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -230,7 +232,7 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
       toggleMode: !isDesktop,
       glassBg: false,
       showThemeSwitch: false,
-      showMediaSession: true,
+      showMediaSession: false,
       restartCurrentOnPrev: true,
       quietUpdate: true,
       defaultPosition: {
@@ -270,7 +272,6 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
       volumeFade: castControls.isCasting
         ? { fadeIn: 0, fadeOut: 0 }
         : defaultOptions.volumeFade,
-      showMediaSession: !current.isRadio && !castControls.isCasting,
     }
   }, [playerState, defaultOptions, isMobilePlayer, castControls.isCasting])
 
@@ -308,6 +309,7 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
         context.resume()
       }
 
+      syncTrackMetadata(info)
       dispatch(currentPlaying(info))
       if (info.duration) {
         const song = info.song
@@ -344,21 +346,37 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
         }
       }
     },
-    [context, dispatch, showNotifications, currentTrackId, isCastingRef],
+    [
+      context,
+      dispatch,
+      showNotifications,
+      currentTrackId,
+      isCastingRef,
+      syncTrackMetadata,
+    ],
   )
 
-  const onAudioPlayTrackChange = useCallback(() => {
-    if (isCastingRef.current) return
-    if (currentTrackId) {
-      subsonic.reportPlayback(
-        currentTrackId,
-        lastPositionMsRef.current,
-        'stopped',
-      )
-    }
-    setHeartbeatTrackId(null)
-    setCurrentTrackId(null)
-  }, [currentTrackId, isCastingRef])
+  const onAudioPlayTrackChange = useCallback(
+    (nextPlayId, audioLists) => {
+      if (isCastingRef.current) return
+      if (currentTrackId) {
+        subsonic.reportPlayback(
+          currentTrackId,
+          lastPositionMsRef.current,
+          'stopped',
+        )
+      }
+      setHeartbeatTrackId(null)
+      setCurrentTrackId(null)
+      const nextItem = Array.isArray(audioLists)
+        ? audioLists.find((item) => item.uuid === nextPlayId)
+        : null
+      if (nextItem) {
+        syncTrackMetadata(nextItem)
+      }
+    },
+    [currentTrackId, isCastingRef, syncTrackMetadata],
+  )
 
   const onAudioPause = useCallback(
     (info) => {
