@@ -276,8 +276,32 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
   }, [playerState, defaultOptions, isMobilePlayer, castControls.isCasting])
 
   const onAudioListsChange = useCallback(
-    (_, audioLists, audioInfo) => dispatch(syncQueue(audioInfo, audioLists)),
-    [dispatch],
+    (_, audioLists, audioInfo) => {
+      if (Array.isArray(audioLists) && audioLists.length === 0) {
+        if (
+          !isCastingRef.current &&
+          currentTrackIdRef.current &&
+          !playerStateRef.current?.current?.isRadio
+        ) {
+          subsonic.reportPlayback(
+            currentTrackIdRef.current,
+            lastPositionMsRef.current,
+            'stopped',
+          )
+        }
+        setHeartbeatTrackId(null)
+        setCurrentTrackId(null)
+        if (
+          (playerStateRef.current?.queue?.length || 0) > 0 ||
+          playerStateRef.current?.current?.uuid
+        ) {
+          dispatch(clearQueue())
+        }
+        return
+      }
+      dispatch(syncQueue(audioInfo, audioLists))
+    },
+    [dispatch, isCastingRef],
   )
 
   const onAudioProgress = useCallback(
@@ -305,6 +329,10 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
   const onAudioPlay = useCallback(
     (info) => {
       if (isCastingRef.current) return
+      if (!playerStateRef.current?.queue?.length) {
+        audioInstance?.pause?.()
+        return
+      }
       if (context && context.state !== 'running') {
         context.resume()
       }
@@ -347,6 +375,7 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
       }
     },
     [
+      audioInstance,
       context,
       dispatch,
       showNotifications,
@@ -444,7 +473,11 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
 
   const onBeforeDestroy = useCallback(() => {
     return new Promise((resolve, reject) => {
-      if (currentTrackId && !playerStateRef.current?.current?.isRadio) {
+      if (
+        !isCastingRef.current &&
+        currentTrackId &&
+        !playerStateRef.current?.current?.isRadio
+      ) {
         subsonic.reportPlayback(
           currentTrackId,
           lastPositionMsRef.current,
@@ -456,7 +489,7 @@ const PlayerContent = ({ authenticated, audioInstance, setAudioInstance }) => {
       dispatch(clearQueue())
       reject()
     })
-  }, [dispatch, currentTrackId])
+  }, [dispatch, currentTrackId, isCastingRef])
 
   if (!visible) {
     document.title = 'Navidrome'
