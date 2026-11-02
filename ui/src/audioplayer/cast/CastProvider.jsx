@@ -1709,6 +1709,8 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
       customData.trackId || extractCastTrackId(mediaInfo?.contentId)
     castDebug(
       'sync',
+      'window',
+      loadedWindowUuidsRef.current.length,
       describeMedia(mediaSession),
       'uuidIdx',
       matchedIdx,
@@ -2051,6 +2053,12 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
               end: winSpec.windowEndIndex,
             }
             loadedQueueLengthRef.current = queue.length
+            castDebug(
+              'adopt window',
+              loadedWindowUuidsRef.current.length,
+              'of',
+              queue.length,
+            )
           }
           // Reload the queue only when the receiver really has nothing
           // loaded. Reloading right away restarts the track that is
@@ -2087,8 +2095,13 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
             (existingMedia.playerState === 'IDLE' &&
               existingMedia.loadingItemId == null)
           ) {
+            castDebug(
+              'adopt: no live media, waiting',
+              describeMedia(existingMedia),
+            )
             scheduleResumeLoad()
           } else {
+            castDebug('adopt: receiver media', describeMedia(existingMedia))
             attachMediaSession(existingMedia)
             // The media may be a ghost cached from the previous page: it
             // keeps reporting its last state but the receiver no longer
@@ -2097,8 +2110,9 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
               try {
                 existingMedia.getStatus(
                   null,
-                  () => {},
-                  () => {
+                  () => castDebug('adopt: getStatus ok'),
+                  (err) => {
+                    castDebug('adopt: getStatus failed', err?.code)
                     deadMediaRef.current.add(existingMedia)
                     if (mediaSessionRef.current === existingMedia) {
                       detachMediaSession()
