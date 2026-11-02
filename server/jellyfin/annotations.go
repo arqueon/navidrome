@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/navidrome/navidrome/core/scrobbler"
 	"github.com/navidrome/navidrome/model"
 	"github.com/navidrome/navidrome/model/request"
 	"github.com/navidrome/navidrome/server/events"
@@ -77,6 +78,11 @@ func (api *Router) setFavorite(w http.ResponseWriter, r *http.Request, starred b
 	if err := repo.SetStar(starred, id); err != nil {
 		api.internalError(w, r, err)
 		return
+	}
+	if resource == "song" {
+		if syncer, ok := api.scrobbler.(scrobbler.FavoriteSyncer); ok {
+			syncer.SyncFavorite(r.Context(), starred, id)
+		}
 	}
 	api.broker.SendMessage(r.Context(), (&events.RefreshResource{}).With(resource, id))
 	encodedID := dto.EncodeID(id)
