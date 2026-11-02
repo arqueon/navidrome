@@ -19,22 +19,6 @@ import {
 } from './castUtils'
 
 const MIN_CAST_TOKEN_FRESHNESS_MS = 15 * 60 * 1000
-
-// Opt-in diagnostics: localStorage.setItem('nd-cast-debug', '1')
-const castDebug = (...args) => {
-  try {
-    if (localStorage.getItem('nd-cast-debug') === '1') {
-      // eslint-disable-next-line no-console
-      console.info('[nd-cast]', ...args)
-    }
-  } catch {
-    // Ignore storage failures
-  }
-}
-const describeMedia = (m) =>
-  m
-    ? `${m.mediaSessionId}:${m.playerState}/${m.idleReason || '-'} cur=${m.currentItemId} ld=${m.loadingItemId} t=${Number(m.getEstimatedTime?.() || 0).toFixed(1)}`
-    : 'none'
 const QUEUE_LOAD_TIMEOUT_MS = 15 * 1000
 // After SESSION_RESUMED the receiver's MEDIA_STATUS may arrive after the
 // session event; wait for it before reloading (and restarting) the queue.
@@ -852,12 +836,6 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
 
   const loadQueueOnCast = useCallback(
     (targetIndex = 0, startSeconds = 0) => {
-      castDebug(
-        'loadQueueOnCast',
-        targetIndex,
-        startSeconds,
-        new Error().stack?.split('\n').slice(2, 6).join(' <- '),
-      )
       const ctx = castContextRef.current
       const session = ctx?.getCurrentSession?.()
       const sessionObj = session?.getSessionObj?.()
@@ -1707,18 +1685,6 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
     }
     const receiverTrackId =
       customData.trackId || extractCastTrackId(mediaInfo?.contentId)
-    castDebug(
-      'sync',
-      'window',
-      loadedWindowUuidsRef.current.length,
-      describeMedia(mediaSession),
-      'uuidIdx',
-      matchedIdx,
-      'trackId',
-      receiverTrackId,
-      'state',
-      nextState,
-    )
     if (matchedIdx < 0 && receiverTrackId) {
       const activeIdx = queue.findIndex(
         (item) => item.uuid === activeUuidRef.current,
@@ -2005,14 +1971,6 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
         // reported by SESSION_RESUMED or already present when the SDK initializes.
         const adoptResumedSession = (session) => {
           adoptingSessionRef.current = true
-          castDebug(
-            'adopt session',
-            (session?.getSessionObj?.()?.media || []).map(describeMedia),
-            'saved',
-            playerStateRef.current?.savedPlayIndex,
-            'playIndex',
-            playerStateRef.current?.playIndex,
-          )
           const audio = audioInstanceRef.current
           attachSessionObj(session?.getSessionObj?.())
           const existingMedia = getActiveMediaSession()
@@ -2050,12 +2008,6 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
               end: winSpec.windowEndIndex,
             }
             loadedQueueLengthRef.current = queue.length
-            castDebug(
-              'adopt window',
-              loadedWindowUuidsRef.current.length,
-              'of',
-              queue.length,
-            )
           }
           // Reload the queue only when the receiver really has nothing
           // loaded. Reloading right away restarts the track that is
@@ -2092,13 +2044,8 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
             (existingMedia.playerState === 'IDLE' &&
               existingMedia.loadingItemId == null)
           ) {
-            castDebug(
-              'adopt: no live media, waiting',
-              describeMedia(existingMedia),
-            )
             scheduleResumeLoad()
           } else {
-            castDebug('adopt: receiver media', describeMedia(existingMedia))
             attachMediaSession(existingMedia)
             // The media may be a ghost cached from the previous page: it
             // keeps reporting its last state but the receiver no longer
@@ -2107,9 +2054,8 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
               try {
                 existingMedia.getStatus(
                   null,
-                  () => castDebug('adopt: getStatus ok'),
-                  (err) => {
-                    castDebug('adopt: getStatus failed', err?.code)
+                  () => {},
+                  () => {
                     deadMediaRef.current.add(existingMedia)
                     if (mediaSessionRef.current === existingMedia) {
                       detachMediaSession()
@@ -2627,22 +2573,6 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
       prevQueueLength: loadedQueueLengthRef.current,
     })
 
-    if (plan.action !== 'NONE') {
-      castDebug(
-        'queue sync',
-        plan.action,
-        'playIndex',
-        playerState.playIndex,
-        'saved',
-        playerState.savedPlayIndex,
-        'active',
-        queue.findIndex((it) => it.uuid === activeUuidRef.current),
-        'window',
-        loadedWindowUuidsRef.current.length,
-        'resumeTimer',
-        Boolean(resumeLoadTimerRef.current),
-      )
-    }
     // Without a known active track the planner falls back to a full reload,
     // which would restart whatever the receiver is playing (e.g. right after a
     // page reload resumed the session). Wait until it has been identified.
@@ -2906,12 +2836,6 @@ const CastProvider = ({ audioInstance, enabled = true, children }) => {
       if (!target || target.uuid === activeUuidRef.current) {
         return
       }
-      castDebug(
-        'player index change',
-        playIndex,
-        'active',
-        queue.findIndex((it) => it.uuid === activeUuidRef.current),
-      )
       jumpCastToTrack(playIndex, target)
     },
     [jumpCastToTrack],
